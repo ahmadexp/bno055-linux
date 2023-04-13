@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <math.h>
 #include <unistd.h>
 #include <string.h>
 #include <getopt.h>
@@ -35,6 +36,65 @@ char senaddr[256] = "0x28";
 char i2c_bus[256] = I2CBUS;
 char htmfile[256];
 char calfile[256];
+
+float A, B, C;
+
+float cubeWidth = 20;
+int width = 160, height = 44;
+float zBuffer[160 * 44];
+char buffer[160 * 44];
+int backgroundASCIICode = '.';
+int distanceFromCam = 100;
+float horizontalOffset;
+float K1 = 40;
+
+float incrementSpeed = 0.6;
+
+float x, y, z;
+float ooz;
+int xp, yp;
+int idx;
+
+/* Cube drawing functions
+ */
+
+float calculateX(int i, int j, int k) {
+  return j * sin(A) * sin(B) * cos(C) - k * cos(A) * sin(B) * cos(C) +
+         j * cos(A) * sin(C) + k * sin(A) * sin(C) + i * cos(B) * cos(C);
+}
+
+float calculateY(int i, int j, int k) {
+  return j * cos(A) * cos(C) + k * sin(A) * cos(C) -
+         j * sin(A) * sin(B) * sin(C) + k * cos(A) * sin(B) * sin(C) -
+         i * cos(B) * sin(C);
+}
+
+float calculateZ(int i, int j, int k) {
+  return k * cos(A) * cos(B) - j * sin(A) * cos(B) + i * sin(B);
+}
+
+void calculateForSurface(float cubeX, float cubeY, float cubeZ, int ch) {
+  x = calculateX(cubeX, cubeY, cubeZ);
+  y = calculateY(cubeX, cubeY, cubeZ);
+  z = calculateZ(cubeX, cubeY, cubeZ) + distanceFromCam;
+
+  ooz = 1 / z;
+
+  xp = (int)(width / 2 + horizontalOffset + K1 * ooz * x * 2);
+  yp = (int)(height / 2 + K1 * ooz * y);
+
+  idx = xp + yp * width;
+  if (idx >= 0 && idx < width * height) {
+    if (ooz > zBuffer[idx]) {
+      zBuffer[idx] = ooz;
+      buffer[idx] = ch;
+    }
+  }
+}
+
+/* end of cube drawing functions
+ */
+
 
 /* ------------------------------------------------------------ *
  * print_usage() prints the programs commandline instructions.  *
@@ -736,6 +796,76 @@ int main(int argc, char *argv[]) {
          fclose(html);
       }
    } /* End reading Euler Orientation */
+
+   /* ----------------------------------------------------------- *
+    *  "-t cub" reads the Euler Orientation from the sensor.      *
+    * This requires the sensor to be in fusion mode (mode > 7).   *
+    * ----------------------------------------------------------- */
+   if(strcmp(datatype, "cub") == 0) {
+
+      int mode = get_mode();
+      if(mode < 8) {
+         printf("Error getting Euler data, sensor mode %d is not a fusion mode.\n", mode);
+         exit(-1);
+      }
+
+      struct bnoeul bnod;
+      res = get_eul(&bnod);
+      if(res != 0) {
+         printf("Error: Cannot read Euler orientation data.\n");
+         exit(-1);
+      }
+
+      /* ----------------------------------------------------------- *
+       * print the formatted output string to stdout (Example below) *
+       * EUL 66.06 -3.00 -15.56 (EUL H R P in Degrees)               *
+       * ----------------------------------------------------------- */
+      printf("\x1b[2J");
+      while(1){
+//        clock_t t;
+//        t = clock();
+
+        res = get_eul(&bnod);
+        if(res != 0) {
+//           printf("Error: Cannot read Euler orientation data.\n");
+           continue;
+        }
+	
+
+
+	A=bnod.eul_head*M_PI/180;
+   	B=bnod.eul_roll*M_PI/180;
+	C=bnod.eul_pitc*M_PI/180;
+
+        //printf("CUBE %3.4f %3.4f %3.4f\n", A, B, C);
+
+	memset(buffer, backgroundASCIICode, width * height);
+    	memset(zBuffer, 0, width * height * 4);
+    	cubeWidth = 20;
+    	horizontalOffset = -2 * cubeWidth;
+    	// first cube
+    	for (float cubeX = -cubeWidth; cubeX < cubeWidth; cubeX += incrementSpeed) {
+      	  for (float cubeY = -cubeWidth; cubeY < cubeWidth;
+              cubeY += incrementSpeed) {
+            calculateForSurface(cubeX, cubeY, -cubeWidth, '@');
+            calculateForSurface(cubeWidth, cubeY, cubeX, '$');
+            calculateForSurface(-cubeWidth, cubeY, -cubeX, '~');
+            calculateForSurface(-cubeX, cubeY, cubeWidth, '#');
+            calculateForSurface(cubeX, -cubeWidth, -cubeY, ';');
+            calculateForSurface(cubeX, cubeWidth, cubeY, '+');
+          }
+        }
+	printf("\x1b[H");
+    	for (int k = 0; k < width * height; k++) {
+      	  putchar(k % width ? buffer[k] : 10);
+    	}
+//        t = clock() - t;
+//        double time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds
+//        printf("Sensor reading took %f seconds \n", time_taken);
+      }
+
+   } /* End reading Euler Orientation */
+
 
   /* ----------------------------------------------------------- *
     *  "-t con"                                                   *
