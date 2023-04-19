@@ -1,10 +1,8 @@
-# Pi-BNO055
-
-![test](https://github.com/fm4dd/pi-bno055/workflows/test/badge.svg)
+# Time Card IMU Cube in 3D over terminal
 
 ## Background
 
-This is a C driver program for operating a Bosch BNO055 IMU sensor via I2C on a Raspberry Pi. I used it with a GY-BNO055 and a Adafruit BNO055. On the GY-BNO055, I had to bridge two solder pads for enabling I2C mode, because serial mode was default.  Later I switched to Adafruit for the superior quality and the onboard 5V-level support.
+This is a C driver program for operating a Bosch BNO055 IMU sensor that is sitting on the Time Card and is connected via the I2C bus. On the GY-BNO055, I had to bridge two solder pads for enabling I2C mode, because serial mode was default.  Later I switched to Adafruit for the superior quality and the onboard 5V-level support.
 
 <img src="ada-bno055.png" height="320px" width="273px">
 
